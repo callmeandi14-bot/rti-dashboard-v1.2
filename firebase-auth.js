@@ -22,55 +22,90 @@ async function isStaff(email) {
         const docSnap = await getDoc(docRef);
         return docSnap.exists();
     } catch (e) {
+        console.error("isStaff error:", e);
         return false;
     }
 }
 
-// Ganti popup → redirect (fix mobile)
 async function loginWithGoogle() {
     try {
         await signInWithRedirect(auth, provider);
     } catch (e) {
-        console.error(e);
-        alert("Login gagal, coba lagi.");
+        console.error("loginWithGoogle error:", e);
     }
 }
 
-// Tangkap hasil redirect — panggil ini di login.html saat halaman load
 async function handleRedirectResult() {
     try {
         const result = await getRedirectResult(auth);
+        
         if (result && result.user) {
             const email = result.user.email;
+            console.log("Login berhasil:", email);
+            
             const allowed = await isStaff(email);
-            if (!allowed) {
-                await signOut(auth);
-                window.location.href = "denied.html";
+            console.log("Is staff:", allowed);
+            
+            if (allowed) {
+                window.location.replace("staff-only-1.html");
             } else {
-                window.location.href = "staff-only-1.html";
+                await signOut(auth);
+                window.location.replace("denied.html");
             }
+            return;
         }
-        // Kalau result null = belum login, diam saja
+
+        // Tidak ada redirect result — cek apakah sudah login sebelumnya
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const allowed = await isStaff(user.email);
+                if (allowed) {
+                    window.location.replace("staff-only-1.html");
+                } else {
+                    await signOut(auth);
+                    window.location.replace("denied.html");
+                }
+            }
+            // Kalau tidak ada user = belum login, diam di halaman login
+        });
+
     } catch (e) {
-        console.error(e);
-        // Jangan alert, cukup log
+        console.error("handleRedirectResult error:", e);
     }
 }
 
 async function logout() {
     await signOut(auth);
-    window.location.href = "login.html";
+    window.location.replace("login.html");
 }
 
 async function guardPage() {
     return new Promise((resolve) => {
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
-                window.location.href = "login.html";
+                window.location.replace("login.html");
                 resolve(false);
-            } else {
-                const allowed = await isStaff(user.email);
-                if (!allowed) {
+                return;
+            }
+            const allowed = await isStaff(user.email);
+            if (!allowed) {
+                await signOut(auth);
+                window.location.replace("denied.html");
+                resolve(false);
+                return;
+            }
+            const nameEl = document.getElementById('staff-name');
+            const emailEl = document.getElementById('staff-email');
+            const photoEl = document.getElementById('staff-photo');
+            if (nameEl) nameEl.textContent = user.displayName;
+            if (emailEl) emailEl.textContent = user.email;
+            if (photoEl) photoEl.src = user.photoURL;
+            resolve(true);
+        });
+    });
+}
+
+export { loginWithGoogle, handleRedirectResult, logout, guardPage };                if (!allowed) {
                     window.location.href = "denied.html";
                     resolve(false);
                 } else {
